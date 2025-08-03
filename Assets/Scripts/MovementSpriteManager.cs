@@ -1,11 +1,10 @@
 ﻿using DG.Tweening;
-using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class MovementSpriteManager : MonoBehaviour
 {
-    public enum CatState { Idle, JumpLeft, JumpRight }
+    public enum CatState { Idle, Moving }
 
     [Header("Cat Image & Sprites")]
     [SerializeField] private Image _catImage;
@@ -16,26 +15,32 @@ public class MovementSpriteManager : MonoBehaviour
     [Header("Idle Animation")]
     [SerializeField] private float _idleFrameDelay = 0.5f;
 
-    [Header("Jump Settings")]
-    [SerializeField] private float _xOffset = 100f;
-    [SerializeField] private float _yOffset = 100f;
-    [SerializeField] private float _jumpDuration = 0.3f;
+    [Header("Grid Settings")]
+    [Tooltip("AnchoredPosition of bottom-left cell")]
+    [SerializeField] private Vector2 gridOrigin = Vector2.zero;
+    [Tooltip("Cell width in UI units")]
+    [SerializeField] private float cellWidth = 100f;
+    [Tooltip("Cell height in UI units")]
+    [SerializeField] private float cellHeight = 100f;
+    [Tooltip("Tween duration for jumps")]
+    [SerializeField] private float moveDuration = 0.3f;
 
-    [Header("Fall Settings")]
-    [SerializeField] private float _fallDistance = 150f;
+    [SerializeField] private RectTransform _catTransform;
 
-    [SerializeField] private Transform _catTransform;
-
-    private CatState _state = CatState.Idle;
     private Coroutine _idleRoutine;
-    private Vector3 _pos;
-    private int _lastDir = 0;
+    private CatState _state = CatState.Idle;
 
-    public float CurrentY => _catTransform.position.y;
+    private int _gridX = 0;
+    private int _gridY = 0;
+    private int _lastDir = 0; 
 
     private void Awake()
     {
-        _pos = _catTransform.position;
+ 
+        _gridX = 0;
+        _gridY = 0;
+        _lastDir = 0;
+        _catTransform.anchoredPosition = gridOrigin;
         StartIdle();
     }
 
@@ -43,46 +48,81 @@ public class MovementSpriteManager : MonoBehaviour
     {
         if (_state != CatState.Idle) return;
         StopIdle();
+        _state = CatState.Moving;
 
-        _state = dir < 0 ? CatState.JumpLeft : CatState.JumpRight;
+ 
         _catImage.sprite = dir < 0 ? _jumpLeftSprite : _jumpRightSprite;
 
-        float horiz = (dir == _lastDir && _lastDir != 0) ? 0f : _xOffset * dir;
-        Vector3 target = _pos + new Vector3(horiz, _yOffset, 0f);
+        // movement logic:
+        if (dir > 0)
+        {
+            // goes right diagonally
+            _gridX += 1;
+            _gridY += 1;
+        }
+        else // dir < 0
+        {
+            // goes left diagonally
+            if (_lastDir > 0)
+            {
+                _gridX -= 1;
+                _gridY += 1;
+            }
+            else
+            { // goes upwards
+                _gridY += 1;
+            }
+        }
+
+        _gridX = Mathf.Clamp(_gridX, 0, 1);
+
+        Vector2 target = gridOrigin
+                       + new Vector2(_gridX * cellWidth, _gridY * cellHeight);
 
         _catTransform
-            .DOMove(target, _jumpDuration)
+            .DOAnchorPos(target, moveDuration)
             .SetEase(Ease.OutQuad)
             .OnComplete(() =>
             {
-                _pos = target;
                 _state = CatState.Idle;
                 StartIdle();
+                _lastDir = dir;
                 onComplete?.Invoke();
             });
-
-        _lastDir = dir;
     }
 
     public void Fall(TweenCallback onComplete)
     {
         if (_state != CatState.Idle) return;
         StopIdle();
+        _state = CatState.Moving;
 
-        _catImage.sprite = _jumpLeftSprite; // or a dedicated fall sprite
+        _gridY = Mathf.Max(0, _gridY - 1);
+        _catImage.sprite = _jumpLeftSprite;
 
-        Vector3 fallTarget = _catTransform.position + Vector3.down * _fallDistance;
+        Vector2 target = gridOrigin
+                       + new Vector2(_gridX * cellWidth, _gridY * cellHeight);
 
         _catTransform
-            .DOMove(fallTarget, _jumpDuration)
+            .DOAnchorPos(target, moveDuration)
             .SetEase(Ease.InQuad)
             .OnComplete(() =>
             {
-                _pos = fallTarget;
                 _state = CatState.Idle;
                 StartIdle();
                 onComplete?.Invoke();
             });
+    }
+
+    public void ResetPosition()
+    {
+        StopIdle();
+        _gridX = 0;
+        _gridY = 0;
+        _lastDir = 0;
+        _state = CatState.Idle;
+        _catTransform.anchoredPosition = gridOrigin;
+        StartIdle();
     }
 
     private void StartIdle()
@@ -98,7 +138,7 @@ public class MovementSpriteManager : MonoBehaviour
         _idleRoutine = null;
     }
 
-    private IEnumerator IdleCycle()
+    private System.Collections.IEnumerator IdleCycle()
     {
         int i = 0;
         while (true)

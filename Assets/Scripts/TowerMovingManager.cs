@@ -1,10 +1,11 @@
 ﻿using UnityEngine;
 using DG.Tweening;
 using System;
+using System.Collections.Generic;
 
 public class TowerMoving : MonoBehaviour
 {
-    [Header("Tower Container (children move together)")]
+    [Header("Tower Container (children all move together)")]
     [SerializeField] private RectTransform towerContainer;
 
     [Header("Spawn Sub‐Containers")]
@@ -16,23 +17,22 @@ public class TowerMoving : MonoBehaviour
     [SerializeField] private GameObject railPrefab;
     [SerializeField] private int initialCount = 12;
 
-    [Header("Pan Settings")]
-    [Tooltip("Vertical distance to pan on each correct answer")]
-    [SerializeField] private float panDistance = 100f;
-    [Tooltip("Duration of the pan animation in seconds")]
+    [Header("Grid & Pan Settings")]
+    [Tooltip("The same cellHeight used by the cat")]
+    [SerializeField] private float cellHeight = 100f;
+    [Tooltip("How long the pan takes")]
     [SerializeField] private float panDuration = 0.4f;
 
     private float _nextSpawnY;
 
     private void Start()
     {
-        // build initial stack
         float y = 0f;
         for (int i = 0; i < initialCount; i++)
         {
             Spawn(stairPrefab, stairsContainer, y);
             Spawn(railPrefab, railsContainer, y);
-            y += panDistance;
+            y += cellHeight;
         }
         _nextSpawnY = y;
     }
@@ -40,27 +40,43 @@ public class TowerMoving : MonoBehaviour
     private void Spawn(GameObject prefab, RectTransform parent, float y)
     {
         var rt = Instantiate(prefab, parent).GetComponent<RectTransform>();
-        rt.anchoredPosition = new Vector2(0, y);
+        rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, y);
     }
-
-    /// <summary>
-    /// Pan the entire towerContainer down by panDistance, then spawn a new stair+rail at the top.
-    /// </summary>
+    
     public void PanDown(Action onComplete = null)
     {
-        Vector2 down = Vector2.down * panDistance;
+        Vector2 down = Vector2.down * cellHeight;
         towerContainer
             .DOAnchorPos(towerContainer.anchoredPosition + down, panDuration)
             .SetEase(Ease.OutQuad)
             .OnComplete(() =>
             {
 
-                // spawn new at the next Y
                 Spawn(stairPrefab, stairsContainer, _nextSpawnY);
                 Spawn(railPrefab, railsContainer, _nextSpawnY);
-                _nextSpawnY += panDistance;
+                _nextSpawnY += cellHeight;
 
                 onComplete?.Invoke();
             });
     }
+
+    public void ResetTower()
+    {
+        foreach (Transform child in stairsContainer)
+            Destroy(child.gameObject);
+        foreach (Transform child in railsContainer)
+            Destroy(child.gameObject);
+
+        towerContainer.anchoredPosition = Vector2.zero;
+
+        float y = 0f;
+        for (int i = 0; i < initialCount; i++)
+        {
+            Spawn(stairPrefab, stairsContainer, y);
+            Spawn(railPrefab, railsContainer, y);
+            y += cellHeight;
+        }
+        _nextSpawnY = y;
+    }
+
 }

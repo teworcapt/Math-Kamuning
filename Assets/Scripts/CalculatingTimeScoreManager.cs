@@ -15,6 +15,8 @@ public class CalculatingScoreTimerManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI roundTimerTxt;
     [SerializeField] private TextMeshProUGUI scoreText;
     [SerializeField] private GameObject gameOverPanel;
+    [SerializeField] private TextMeshProUGUI finalScoreText;
+
 
     [Header("Timers")]
     [Tooltip("Seconds per question")]
@@ -64,7 +66,7 @@ public class CalculatingScoreTimerManager : MonoBehaviour
 
         if (_rTimer <= 0f)
         {
-            // round over → game over
+            // round over > game over
             TriggerGameOver();
         }
     }
@@ -121,10 +123,31 @@ public class CalculatingScoreTimerManager : MonoBehaviour
 
     private void GenerateQuestion()
     {
-        int a = Random.Range(1, 11);
-        int b = Random.Range(1, 11);
-        _answer = a + b;
-        equationText.text = $"{a} + {b}";
+        int a = Random.Range(1, 15);
+        int b = Random.Range(1, 15);
+
+        string op;
+        switch (Random.Range(0, 3))
+        {
+            case 0:
+                _answer = a + b;
+                op = "+";
+                break;
+            case 1:
+                _answer = a - b;
+                op = "-";
+                break;
+            case 2:
+                _answer = a * b;
+                op = "×";
+                break;
+            default:
+                _answer = a + b;
+                op = "+";
+                break;
+        }
+
+        equationText.text = $"{a} {op} {b}";
 
         int delta = Random.Range(1, 4);
         int wrong = _answer + (Random.value > 0.5f ? delta : -delta);
@@ -146,10 +169,46 @@ public class CalculatingScoreTimerManager : MonoBehaviour
         _locked = true;
         gameOverPanel.SetActive(true);
         equationText.text = "Game Over!";
+
+        if (finalScoreText != null)
+            finalScoreText.text = $"Final Score: {_score}";
     }
+
 
     private void UpdateScoreUI()
     {
         scoreText.text = $"Score: {_score}";
     }
+
+    public void ResetScore()
+    {
+        _score = 0;
+        UpdateScoreUI();
+    }
+
+    public void ResetTimer()
+    {
+        _qTimer = timePerQuestion;
+        _rTimer = roundDuration;
+        questionTimerTxt.text = Mathf.CeilToInt(_qTimer).ToString();
+        roundTimerTxt.text = Mathf.CeilToInt(_rTimer).ToString();
+    }
+
+    public void EnableQuestionCycle()
+    {
+        _locked = false;
+        leftBtn.interactable = true;
+        rightBtn.interactable = true;
+        StartNextQuestion();
+    }
+
+    public void HideGameOverPanel()
+    {
+        gameOverPanel.SetActive(false);
+
+        if (finalScoreText != null)
+            finalScoreText.text = "";
+    }
+
+
 }
