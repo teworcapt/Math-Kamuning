@@ -2,7 +2,6 @@
 using UnityEngine.UI;
 using DG.Tweening;
 using TMPro;
-using System;
 
 public class CalculatingScoreTimerManager : MonoBehaviour
 {
@@ -14,13 +13,13 @@ public class CalculatingScoreTimerManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI rightTxt;
     [SerializeField] private TextMeshProUGUI questionTimerTxt;
     [SerializeField] private TextMeshProUGUI roundTimerTxt;
-
-    [Header("Score UI")]
     [SerializeField] private TextMeshProUGUI scoreText;
-    private int _score = 0;
+    [SerializeField] private GameObject gameOverPanel;
 
-    [Header("Timing Settings")]
+    [Header("Timers")]
+    [Tooltip("Seconds per question")]
     [SerializeField] private float timePerQuestion = 5f;
+    [Tooltip("Total round duration in seconds")]
     [SerializeField] private float roundDuration = 60f;
 
     [Header("Movement References")]
@@ -28,28 +27,28 @@ public class CalculatingScoreTimerManager : MonoBehaviour
     [SerializeField] private MovementSpriteManager _cat;
 
     private int _answer;
-    private float _qTimer, _rTimer;
+    private float _qTimer;
+    private float _rTimer;
     private bool _locked;
-    private int _pending;
+    private int _score = 0;
 
     private void Start()
     {
         leftBtn.onClick.AddListener(() => OnAnswered(-1));
         rightBtn.onClick.AddListener(() => OnAnswered(1));
 
+        gameOverPanel.SetActive(false);
         _score = 0;
         UpdateScoreUI();
 
+        // Start timers and first question
         _rTimer = roundDuration;
-        NextQuestion();
+        StartNextQuestion();
     }
 
     private void Update()
     {
         if (_locked) return;
-
-        if (Input.GetKeyDown(KeyCode.LeftArrow)) OnAnswered(-1);
-        if (Input.GetKeyDown(KeyCode.RightArrow)) OnAnswered(1);
 
         _qTimer -= Time.deltaTime;
         _rTimer -= Time.deltaTime;
@@ -57,47 +56,16 @@ public class CalculatingScoreTimerManager : MonoBehaviour
         questionTimerTxt.text = Mathf.CeilToInt(_qTimer).ToString();
         roundTimerTxt.text = Mathf.CeilToInt(_rTimer).ToString();
 
-        if (_qTimer <= 0f) NextQuestion();           // just skip to next
-        if (_rTimer <= 0f) EndRound();
-    }
-
-    private void NextQuestion()
-    {
-        _locked = false;
-        leftBtn.interactable = true;
-        rightBtn.interactable = true;
-
-        _qTimer = timePerQuestion;
-
-        // Generate question (with optional bit-shift)
-        int a = UnityEngine.Random.Range(1, 11);
-        int b = UnityEngine.Random.Range(1, 11);
-        if (UnityEngine.Random.value > 0.5f)
+        if (_qTimer <= 0f)
         {
-            int s = UnityEngine.Random.Range(1, 4);
-            _answer = (a << s) + b;
-            equationText.text = $"{a} << {s} + {b}";
-        }
-        else
-        {
-            _answer = a + b;
-            equationText.text = $"{a} + {b}";
+            // question time expired: new question
+            StartNextQuestion();
         }
 
-        // Wrong answer
-        int delta = UnityEngine.Random.Range(1, 5);
-        int wrong = _answer + ((UnityEngine.Random.value > 0.5f) ? delta : -delta);
-
-        // Randomize placement
-        if (UnityEngine.Random.value > 0.5f)
+        if (_rTimer <= 0f)
         {
-            leftTxt.text = _answer.ToString();
-            rightTxt.text = wrong.ToString();
-        }
-        else
-        {
-            leftTxt.text = wrong.ToString();
-            rightTxt.text = _answer.ToString();
+            // round over → game over
+            TriggerGameOver();
         }
     }
 
@@ -116,38 +84,72 @@ public class CalculatingScoreTimerManager : MonoBehaviour
         {
             _score++;
             UpdateScoreUI();
+
+            _cat.Jump(dir, () =>
+            {
+                DOVirtual.DelayedCall(0.5f, () =>
+                    _tower.PanDown(StartNextQuestion)
+                );
+            });
+        }
+        else
+        {
+            _cat.Fall(() =>
+            {
+                DOVirtual.DelayedCall(0.5f, StartNextQuestion);
+            });
+        }
+    }
+
+    private void StartNextQuestion()
+    {
+        if (_rTimer <= 0f)
+        {
+            TriggerGameOver();
+            return;
         }
 
-        // We always do exactly two animations: cat jump + tower scroll
-        _pending = 2;
-
-        _cat.Jump(dir, () => {
-            OnAnimationComplete();         // cat done
-            _tower.MoveUp(OnAnimationComplete); // then tower done
-        });
-    }
-
-    private void OnAnimationComplete()
-    {
-        if (--_pending > 0) return;
-
-        if (_rTimer > 0f)
-            NextQuestion();
-        else
-            EndRound();
-
         _locked = false;
+        leftBtn.interactable = true;
+        rightBtn.interactable = true;
+
+        // reset question timer
+        _qTimer = timePerQuestion;
+
+        GenerateQuestion();
     }
 
-    private void EndRound()
+    private void GenerateQuestion()
+    {
+        int a = Random.Range(1, 11);
+        int b = Random.Range(1, 11);
+        _answer = a + b;
+        equationText.text = $"{a} + {b}";
+
+        int delta = Random.Range(1, 4);
+        int wrong = _answer + (Random.value > 0.5f ? delta : -delta);
+
+        if (Random.value > 0.5f)
+        {
+            leftTxt.text = _answer.ToString();
+            rightTxt.text = wrong.ToString();
+        }
+        else
+        {
+            leftTxt.text = wrong.ToString();
+            rightTxt.text = _answer.ToString();
+        }
+    }
+
+    public void TriggerGameOver()
     {
         _locked = true;
+        gameOverPanel.SetActive(true);
         equationText.text = "Game Over!";
     }
 
     private void UpdateScoreUI()
     {
-        if (scoreText != null)
-            scoreText.text = $"Score: {_score}";
+        scoreText.text = $"Score: {_score}";
     }
 }

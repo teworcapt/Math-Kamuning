@@ -1,7 +1,7 @@
-﻿using UnityEngine;
-using UnityEngine.UI;
-using DG.Tweening;
+﻿using DG.Tweening;
 using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
 
 public class MovementSpriteManager : MonoBehaviour
 {
@@ -17,11 +17,12 @@ public class MovementSpriteManager : MonoBehaviour
     [SerializeField] private float _idleFrameDelay = 0.5f;
 
     [Header("Jump Settings")]
-    [Tooltip("Horizontal offset per jump")]
     [SerializeField] private float _xOffset = 100f;
-    [Tooltip("Vertical offset per jump")]
     [SerializeField] private float _yOffset = 100f;
     [SerializeField] private float _jumpDuration = 0.3f;
+
+    [Header("Fall Settings")]
+    [SerializeField] private float _fallDistance = 150f;
 
     [SerializeField] private Transform _catTransform;
 
@@ -30,16 +31,14 @@ public class MovementSpriteManager : MonoBehaviour
     private Vector3 _pos;
     private int _lastDir = 0;
 
+    public float CurrentY => _catTransform.position.y;
+
     private void Awake()
     {
         _pos = _catTransform.position;
         StartIdle();
     }
 
-    /// <summary>
-    /// Triggers a jump in the given direction (-1=left, +1=right).
-    /// Diagonal if changing direction, straight up if same direction twice.
-    /// </summary>
     public void Jump(int dir, TweenCallback onComplete)
     {
         if (_state != CatState.Idle) return;
@@ -63,6 +62,27 @@ public class MovementSpriteManager : MonoBehaviour
             });
 
         _lastDir = dir;
+    }
+
+    public void Fall(TweenCallback onComplete)
+    {
+        if (_state != CatState.Idle) return;
+        StopIdle();
+
+        _catImage.sprite = _jumpLeftSprite; // or a dedicated fall sprite
+
+        Vector3 fallTarget = _catTransform.position + Vector3.down * _fallDistance;
+
+        _catTransform
+            .DOMove(fallTarget, _jumpDuration)
+            .SetEase(Ease.InQuad)
+            .OnComplete(() =>
+            {
+                _pos = fallTarget;
+                _state = CatState.Idle;
+                StartIdle();
+                onComplete?.Invoke();
+            });
     }
 
     private void StartIdle()
